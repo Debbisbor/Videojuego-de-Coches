@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Carrera de Coches</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background-color: #333;
+      color: white;
+      font-family: Arial, sans-serif;
+    }
+    canvas {
+      display: block;
+      background-color: #222;
+    }
+    .controls {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+    }
+    button {
+      padding: 10px;
+      margin: 5px;
+      font-size: 16px;
+    }
+  </style>
+</head>
+<body>
+  <div class="controls">
+    <button id="startBtn">Inicio</button>
+    <button id="pauseBtn">Pausa</button>
+    <button id="resetBtn">Reiniciar</button>
+    <span id="levelText">Nivel: 1</span>
+  </div>
+  <canvas id="gameCanvas"></canvas>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/howler/2.2.3/howler.min.js"></script>
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    // Variables del juego
+    let gameStarted = false;
+    let gamePaused = false;
+    let playerCar = { x: canvas.width / 2, y: canvas.height - 100, width: 50, height: 80, speed: 5 };
+    let aiCars = [
+      { x: canvas.width / 2 - 100, y: canvas.height - 100, width: 50, height: 80, speed: 4 },
+      { x: canvas.width / 2 + 100, y: canvas.height - 100, width: 50, height: 80, speed: 4 }
+    ];
+    let obstacles = [];
+    let level = 1;
+    let levelData = [
+      { // Nivel 1
+        obstacles: [
+          { x: 200, y: 300, width: 50, height: 50 },
+          { x: 500, y: 500, width: 50, height: 50 }
+        ]
+      },
+      { // Nivel 2
+        obstacles: [
+          { x: 300, y: 400, width: 50, height: 50 },
+          { x: 600, y: 200, width: 50, height: 50 }
+        ]
+      },
+      { // Nivel 3
+        obstacles: [
+          { x: 100, y: 100, width: 50, height: 50 },
+          { x: 700, y: 300, width: 50, height: 50 }
+        ]
+      }
+    ];
+
+    // Sonidos
+    const engineSound = new Howl({ src: ['https://www.soundjay.com/vehicle/car-start-01.mp3'], loop: true });
+    const crashSound = new Howl({ src: ['https://www.soundjay.com/vehicle/car-crash-sound-effect.mp3'] });
+    const winSound = new Howl({ src: ['https://www.soundjay.com/misc/success-bell-01.mp3'] });
+    const backgroundMusic = new Howl({ src: ['https://www.soundjay.com/misc/sounds/cinematic-music-01.mp3'], loop: true });
+
+    // Dibujar el coche del jugador
+    function drawPlayerCar() {
+      ctx.fillStyle = 'blue';
+      ctx.fillRect(playerCar.x, playerCar.y, playerCar.width, playerCar.height);
+    }
+
+    // Dibujar los coches de la IA
+    function drawAICars() {
+      aiCars.forEach(car => {
+        ctx.fillStyle = 'red';
+        ctx.fillRect(car.x, car.y, car.width, car.height);
+      });
+    }
+
+    // Dibujar obstáculos
+    function drawObstacles() {
+      ctx.fillStyle = 'yellow';
+      levelData[level - 1].obstacles.forEach(obstacle => {
+        ctx.fillRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height);
+      });
+    }
+
+    // Verificar colisiones con obstáculos
+    function checkCollisions(car) {
+      let collided = false;
+      levelData[level - 1].obstacles.forEach(obstacle => {
+        if (car.x < obstacle.x + obstacle.width &&
+            car.x + car.width > obstacle.x &&
+            car.y < obstacle.y + obstacle.height &&
+            car.y + car.height > obstacle.y) {
+          collided = true;
+        }
+      });
+      return collided;
+    }
+
+    // Cambiar de nivel
+    function nextLevel() {
+      if (level < levelData.length) {
+        level++;
+        document.getElementById('levelText').textContent = `Nivel: ${level}`;
+        resetCars();
+      } else {
+        winSound.play();
+        alert("¡Has ganado!");
+        gameStarted = false;
+      }
+    }
+
+    // Reiniciar posición de los coches
+    function resetCars() {
+      playerCar.x = canvas.width / 2;
+      playerCar.y = canvas.height - 100;
+      aiCars.forEach(car => {
+        car.x = canvas.width / 2 + (Math.random() * 200 - 100); // Posición aleatoria
+        car.y = canvas.height - 100;
+      });
+    }
+
+    // Reiniciar el juego
+    function resetGame() {
+      level = 1;
+      document.getElementById('levelText').textContent = `Nivel: ${level}`;
+      resetCars();
+      gameStarted = false;
+      gamePaused = false;
+      engineSound.stop();
+      backgroundMusic.stop();
+    }
+
+    // Lógica del juego
+    function updateGame() {
+      if (!gameStarted || gamePaused) return;
+
+      // Mover coches de la IA
+      aiCars.forEach(car => {
+        if (!checkCollisions(car)) {
+          car.y -= car.speed;
+        }
+      });
+
+      // Verificar si el coche del jugador ha llegado a la meta
+      if (playerCar.y < 50) {
+        nextLevel();
+      }
+
+      // Verificar colisiones del jugador
+      if (checkCollisions(playerCar)) {
+        crashSound.play();
+        playerCar.y += 20; // Penalización: retrocede un poco
+      }
+
+      // Dibujar todo
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      drawPlayerCar();
+      drawAICars();
+      drawObstacles();
+
+      requestAnimationFrame(updateGame);
+    }
+
+    // Eventos de botones
+    document.getElementById('startBtn').addEventListener('click', () => {
+      gameStarted = true;
+      engineSound.play();
+      backgroundMusic.play();
+      updateGame();
+    });
+
+    document.getElementById('pauseBtn').addEventListener('click', () => {
+      gamePaused = !gamePaused;
+      if (gamePaused) {
+        engineSound.pause();
+        backgroundMusic.pause();
+      } else {
+        engineSound.play();
+        backgroundMusic.play();
+      }
+    });
+
+    document.getElementById('resetBtn').addEventListener('click', () => {
+      resetGame();
+    });
+
+    // Control del coche con las flechas
+    document.addEventListener('keydown', (e) => {
+      if (gameStarted && !gamePaused) {
+        if (e.key === 'ArrowUp' && playerCar.y > 0) {
+          playerCar.y -= playerCar.speed;
+        }
+        if (e.key === 'ArrowDown' && playerCar.y < canvas.height - playerCar.height) {
+          playerCar.y += playerCar.speed;
+        }
+        if (e.key === 'ArrowLeft' && playerCar.x > 0) {
+          playerCar.x -= playerCar.speed;
+        }
+        if (e.key === 'ArrowRight' && playerCar.x < canvas.width - playerCar.width) {
+          playerCar.x += playerCar.speed;
+        }
+      }
+    });
+  </script>
+</body>
+</html>
